@@ -11,8 +11,8 @@ def main():
     lat_mean = 10
     lat_stddev = 4
 
-    p = SingleControllerPredictor(N, W, itt, auto_rate, num_trials, (lat_mean, lat_stddev))
-    print p.generate_predictions()
+    p = SingleControllerPredictor(N, W, itt, auto_rate, num_trials, lat_mean, lat_stddev)
+    print (p.generate_predictions())
 
 if __name__ == "__main__":
     main()
