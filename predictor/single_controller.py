@@ -15,8 +15,7 @@ class SingleControllerPredictor:
             self.server_latency_dists.append(ControllerServerLatencyDist(ctrl_server_lat_mean, ctrl_server_lat_stddev))
 
     def __init__ (self, N, W, inter_trans_time, auto_rate, 
-                    num_trials, 
-                    (ctrl_server_lat_mean, ctrl_server_lat_stddev)):
+                    num_trials, ctrl_server_lat_mean, ctrl_server_lat_stddev):
         self.N = N
         self.W = W
         self.inter_trans_time = inter_trans_time
