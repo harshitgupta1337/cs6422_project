@@ -1,5 +1,6 @@
 from predictor.single_controller import *
 from distributions.latency_dist import ControllerServerLatencyDist
+import numpy
 
 N = None
 W = None
@@ -13,10 +14,17 @@ trans_attempts = {}
 
 def generate_transaction_arrivals(num_transactions):
     arrivals = []
+    '''
     t = 10
     for i in range(num_transactions):
         arrivals.append(t)
         t += 40
+    '''
+    intensity = 45
+    curr_ts = 0.0
+    for ts in numpy.random.poisson(intensity, num_transactions):
+        curr_ts += ts
+        arrivals.append(curr_ts)
     return arrivals
 
 def run_system():
@@ -85,13 +93,13 @@ def process_transaction(trans_idx, trans_start_ts):
 
 def main():
     global N, W, auto_rate, lat_mean, lat_stddev
-    N = 100
-    W = 4
+    N = 500
+    W = 1
     auto_rate = 0.00001 # this is per millisecond
     lat_mean = 10
     lat_stddev = 0.0001
 
-    num_transactions = 200 
+    num_transactions = 10000
  
     for i in range(N):
         server_latency_dists.append(ControllerServerLatencyDist(lat_mean, lat_stddev))
@@ -101,6 +109,7 @@ def main():
     curr_time = 0.0
     last_finished_trans_idx = -1
 
+    total_latency = 0.0
     trans_idx = 0
     while trans_idx < num_transactions:
         if last_finished_trans_idx < 0:
@@ -112,10 +121,18 @@ def main():
 
         finish_time = process_transaction(trans_idx, curr_time)
         trans_execn_latency = finish_time - transaction_arrivals[trans_idx]
-        print ("TransID\t", trans_idx, "\tstart_delay\t", "%.2f"%(curr_time-transaction_arrivals[trans_idx]), "\tlatency\t", "%.2f"%trans_execn_latency, "\tnum_trials\t", trans_attempts[trans_idx])
+        #print ("TransID\t", trans_idx, "\tstart_delay\t", "%.2f"%(curr_time-transaction_arrivals[trans_idx]), "\tlatency\t", "%.2f"%trans_execn_latency, "\tnum_trials\t", trans_attempts[trans_idx])
         curr_time = finish_time
         last_finished_trans_idx = trans_idx
         trans_idx += 1
+        total_latency += trans_execn_latency
+
+    total = 0.0
+    for trans_idx in range(1, num_transactions):
+        total += transaction_arrivals[trans_idx] - transaction_arrivals[trans_idx-1]
+    mean_inter_arrival = total/num_transactions
+    print (mean_inter_arrival)
+    print (total_latency/num_transactions)
 
 if __name__ == "__main__":
     main()
