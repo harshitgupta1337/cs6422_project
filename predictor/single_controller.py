@@ -21,7 +21,7 @@ class SingleControllerPredictor:
         self.inter_trans_time = inter_trans_time
         self.auto_rate = auto_rate
         self.num_trials = num_trials
-        self.inf = 100
+        self.inf = 1000
         
         self.server_latency_dists = []
         self.initialize_server_latency_dists(ctrl_server_lat_mean, ctrl_server_lat_stddev)
@@ -40,7 +40,7 @@ class SingleControllerPredictor:
     def get_prob_auto_change(self, k, server_idx):
         latency_dist = self.server_latency_dists[server_idx]
 
-        exponent = -1 * self.auto_rate * (k*self.inter_trans_time + latency_dist.sample() - latency_dist.sample())
+        exponent = -1 * self.auto_rate * (k*self.inter_trans_time + latency_dist.sample() - latency_dist.sample() - latency_dist.sample() - latency_dist.sample())
         return (1 - math.exp(exponent))
 
     def generate_single_prediction(self):
@@ -57,7 +57,8 @@ class SingleControllerPredictor:
 
             prob_not_changed *= (1-total_change_prob)
 
-        return (1 - prob_not_changed)
+        return prob_not_changed
+        #return (1 - prob_not_changed)
 
     def generate_predictions(self):
         probs = []

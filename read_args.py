@@ -1,0 +1,10 @@
+def read_args(argv):
+    #print (argv)
+    N = int(argv[1])
+    W = int(argv[2])
+    itt = float(argv[3])
+    auto_rate = float(argv[4])
+    num_trials = int(argv[5])
+    lat_mean = float(argv[6])
+    lat_stddev = float(argv[7])
+    return (N, W, itt, auto_rate, num_trials, lat_mean, lat_stddev)
