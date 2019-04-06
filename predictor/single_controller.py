@@ -3,11 +3,18 @@ import operator as op
 from functools import reduce
 import random, math
 
+ncr_cache = {}
+
 def ncr(n, r):
+    #global ncr_cache
+    #if (n,r) in ncr_cache.keys():
+    #    return ncr_cache[(n,r)]
     r = min(r, n-r)
     numer = reduce(op.mul, range(n, n-r, -1), 1)
     denom = reduce(op.mul, range(1, r+1), 1)
-    return numer / denom
+    result = numer/denom
+    #ncr_cache[(n,r)] = result
+    return result
 
 class SingleControllerPredictor:
     def initialize_server_latency_dists(self, ctrl_server_lat_mean, ctrl_server_lat_stddev):
@@ -31,7 +38,8 @@ class SingleControllerPredictor:
     '''
     def get_prob_last_change_k(self, k):
         prob = 1
-        not_chosen = float(ncr(self.N-1, self.W))/float(ncr(self.N, self.W))
+        #not_chosen = float(ncr(self.N-1, self.W))/float(ncr(self.N, self.W))
+        not_chosen = 1 - float(self.W)/float(self.N)
         for i in range(k-1):
             prob *= not_chosen
         prob *= (1 - not_chosen)

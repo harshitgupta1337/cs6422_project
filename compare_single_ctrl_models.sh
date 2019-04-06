@@ -5,7 +5,7 @@ for N in 100
 do
     for W in 2 4 8
     do
-        for itt in 200 400 800 1600
+        for itt in 200 400 800 1600 3200 
         do
             for auto_rate in 0.00001
             do
