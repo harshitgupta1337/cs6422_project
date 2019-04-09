@@ -38,5 +38,5 @@ Contributions:<br />
 - mathematical model-report-presentation : team
 - single simulator integrations :  Harshit
 - 2pc commit : Lucia
-- communications : Salini
+- visualizations, communications : Salini
 <br />
