@@ -14,7 +14,13 @@ solution
 75% goal completed: 
 We designed a preliminary approach, defined by the 75\% goal of our solution, where one controller will run the previously mentioned placement algorithm, and various servers will act as resources to execute the transaction delivered from the controller. 
 
-The first challenge that we faced on our preliminary design is the autonomy of the servers, that can make autonomous decisions without the intervention of the controller. We defined this variable as \Gamma auto, which indicates the ratio of autonomous decisions made by controllers and that is therefore 0 <= \Gamma auto <= 1 .
+- The first challenge that we faced on our preliminary design is the autonomy of the servers, that can make autonomous decisions without the intervention of the controller. We defined this variable as \Gamma auto, which indicates the ratio of autonomous decisions made by controllers.
+- To quantify state staleness in the controller, we formulated the time-frame in which the controller could become stale, which will be referred as window of vulnerability.
+- Network  latency  between  the  controller  instance  and servers are drawn from independent and identical Gaussian distributions L with mean Lmean and   standard deviation Lstddev.
+- Requests  arrive  to  the  controller  instance  based  on  a Poisson  process with  mean  inter-arrival  time  equal  to tITT (inter-transaction time)
+
+
+
 <br />
 
 100% goal (underway)
