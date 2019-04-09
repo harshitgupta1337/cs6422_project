@@ -21,7 +21,8 @@ We designed a preliminary approach, defined by the 75\% goal of our solution, wh
 - Requests  arrive  to  the  controller  instance  based  on  a Poisson  process with  mean  inter-arrival  time  equal  to tITT (inter-transaction time)
 <br />
 (The mathematical derivation and solution has been included in the progress report and result pngs have been included in the repo.) 
-<br />
+<br /><br />
+
 
 100% goal (underway)
 - Formulate the probability of staleness/transaction failure for multi-controller setting
