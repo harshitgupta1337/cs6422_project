@@ -21,8 +21,6 @@ class RequestHandler(threading.Thread):
             print ("Was able to read an item")
             self.callback(req)
 
-
-
 class Controller:
     def __init__(self, N, w, server_data):
 
