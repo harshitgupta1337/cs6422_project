@@ -32,10 +32,6 @@ message Transaction {
     optional uint32 transaction_id = 2;
 }
 
-message Version {
-    optional uint32 some_field = 1;
-}
-
 message ServerReply {
     optional uint32 some_field = 1;
 }
@@ -89,3 +85,9 @@ message CommitProtocolMessage {
   
     optional uint32 transaction_id = 8;
 }
+
+message Version {
+    required uint32 v1 = 1; // index for changes by controller
+    required uint32 v2 = 2; // index for changes by server
+}
+
