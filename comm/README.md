@@ -2,6 +2,7 @@ node and server instances.
 changes to be made when integrating with simulator and 2pc.
 
 pseudocode of the flow of control:
+            ```
             prepare context, frontend and backend sockets
             while true:
                 poll on both sockets
@@ -11,3 +12,4 @@ pseudocode of the flow of control:
                 if backend had input:
                     read all frames from backend
                     send to frontend
+            ```
