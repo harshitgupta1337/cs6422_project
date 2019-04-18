@@ -1,27 +1,39 @@
 #!/usr/bin/env python
 
 import threading
+import time
 from random import choice
 
 import zmq
 
-class Client(threading.Thread):
-    def __init__(self, identity):
+class Client(object):
+    def __init__(self, identity, msg_recv_callback):
+        self.msg_recv_callback = msg_recv_callback
+        self.identity = identity.encode('ascii')
+        self.zmq_context = zmq.Context()
+
+        self.worker = ClientWorker(self.zmq_context, self.identity, self)
+        self.worker.start()
+
+    def sendMsg(self, data):
+        self.worker.send(data)
+ 
+class ClientWorker(threading.Thread):
+    def __init__(self, zmq_context, identity, parent):
         threading.Thread.__init__(self)
         self.identity = identity
-        self.zmq_context = zmq.Context()
-    
+        self.zmq_context = zmq_context
+        self.parent = parent
+   
     def run(self):
         #Connects to server.
         num1, num2 = self.callback()
         print('Client ID - %s. Numbers to be added - %s and %s.' % (self.identity, num1, num2))
-        socket = self.get_connection()
-        
+        self.socket = self.get_connection()
        
+        #self.send('%s:%s' % (num1, num2))
         poller = zmq.Poller()
-        poller.register(socket, zmq.POLLIN)
-        self.send(socket, '%s:%s' % (num1, num2))
-        
+        poller.register(self.socket, zmq.POLLIN)
        
         # Polling is used to check for sockets with data before reading because socket.recv() is blocking.
         while True:
@@ -29,18 +41,18 @@ class Client(threading.Thread):
             sockets = dict(poller.poll(5000))
             
             # If socket has data to be read.
-            if socket in sockets and sockets[socket] == zmq.POLLIN:
-                result = self.receive(socket)
-                print('Client ID - %s. Numbers sent to be added - %s and %s. Received result - %s.' % (self.identity, num1, num2, result))
-                break
+            if self.socket in sockets and sockets[self.socket] == zmq.POLLIN:
+                result = self.receive(self.socket)
+
+                self.parent.msg_recv_callback(result)
         
-        socket.close()
+        self.socket.close()
         self.zmq_context.term()
 
-    def send(self, socket, data):
+    def send(self, data):
         #Send data through provided socket.
         
-        socket.send(data)
+        self.socket.send(data.encode('ascii'))
 
     def receive(self, socket):
         #Recieve and return data through provided socket.
@@ -60,8 +72,17 @@ class Client(threading.Thread):
         num2 = choice(number_list)
         return num1, num2
 
+def foo(msg):
+    print ("Message received at time = %s"%time.time())
+
 if __name__ == '__main__':
     # Instantiate three clients with different ID's.
-    for i in range(1,4):
-        client = Client(str(i))
-        client.start()
+    i = 1
+    client = Client(str("tcp://127.0.0.1:600%d"%i), foo)
+    time.sleep(1)
+
+    for i in range(0,100):
+        print ("sending msg at time %s"%time.time())
+        client.sendMsg("%d:%d"%(i,i))
+        time.sleep(1)
+

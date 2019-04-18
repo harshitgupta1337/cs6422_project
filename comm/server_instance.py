@@ -5,8 +5,9 @@ import threading
 import zmq
 
 class Server(object):
-    def __init__(self):
+    def __init__(self, msg_recv_callback):
         self.zmq_context = zmq.Context()
+        self.msg_recv_callback = msg_recv_callback
     
     def start(self):
         
@@ -20,48 +21,47 @@ class Server(object):
         socket_back = self.zmq_context.socket(zmq.DEALER)
         socket_back.bind('inproc://backend')
         
-        # Start three workers.
-        for i in range(1,4):
-            worker = Worker(self.zmq_context, i)
-            worker.start()
+        self.worker = Worker(self.zmq_context, self)
+        self.worker.start()
         
         # Read a client's socket ID and request. => Send socket ID and request to a worker. => Read a client's socket ID and result from a worker. => Route result back to the client using socket ID.
         zmq.device(zmq.QUEUE, socket_front, socket_back)
 
+    def sendMsg(self, client_id, msg):
+        self.worker.sendMsg(client_id, msg)
+
 class Worker(threading.Thread):
     
-    def __init__(self, zmq_context, _id):
+    def __init__(self, zmq_context, parent):
         threading.Thread.__init__(self)
         self.zmq_context = zmq_context
-        self.worker_id = _id
+        self.parent = parent
     
     def run(self):
         #Socket to communicate with front facing server.
-        socket = self.zmq_context.socket(zmq.DEALER)
-        socket.connect('inproc://backend')
+        self.socket = self.zmq_context.socket(zmq.DEALER)
+        self.socket.connect('inproc://backend')
         
         while True:
             # First string recieved is socket ID of client
-            client_id = socket.recv()
-            request = socket.recv()
-            print('Worker ID - %s. Recieved computation request.' % (self.worker_id))
-            result = self.SendMsg(request)
-            print('Worker ID - %s. Sending computed result back.' % (self.worker_id))
-            
-            #For successful routing of result to correct client, the socket ID of client should be sent first.
-            
-            socket.send(client_id, zmq.SNDMORE)
-            socket.send(result)
+            client_id = self.socket.recv()
+            request = self.socket.recv()
+            self.processMessage(client_id, request.decode('ascii'))
 
-    def SendMsg(self, request):
-        #SendMsg (dest, message)
-        #used by the controller/server to send message to some other entity "dest"
-        #replace request with  (dest, message)
-        #socket.send(dest, zmq.SNDMORE)
-        #socket.send(result)
-        #request-->message
-        numbers = request.split(':')
-        return str(int(numbers[0]) + int(numbers[1]))
+    # this message is not thread-safe
+    def sendMsg(self, client_id, msg):
+        self.socket.send(client_id, zmq.SNDMORE)
+        self.socket.send_string(msg)
+
+    def processMessage(self, client_id, msg):
+        self.parent.msg_recv_callback(client_id, msg)
+
+def msg_recvd(client_id, msg):
+    print ("Msg received from client_id = %s; message = %s" % (client_id, msg))
+    server.sendMsg(client_id, "ACK")
 
 if __name__ == '__main__':
-    server = Server().start()
+    global server
+    server = Server(msg_recvd)
+    server.start()
+
