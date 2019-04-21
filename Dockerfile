@@ -20,3 +20,4 @@ CMD [ "python", "./server_instance.py" ]
 #then run the following commands on the terminal
 #to build docker image : docker build -t python-image .
 #to run the image : docker run python-image
+# to pass arguments : docker run python-image argv1 argv2 ...
