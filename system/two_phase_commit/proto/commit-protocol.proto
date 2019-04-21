@@ -33,7 +33,8 @@ message Transaction {
 }
 
 message Version {
-    optional uint32 some_field = 1;
+    required uint32 v1 = 1; // index for changes by controller
+    required uint32 v2 = 2; // index for changes by server
 }
 
 message ServerReply {

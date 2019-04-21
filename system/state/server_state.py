@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "/home/harshitg/Courses/CS6422/cs6422_project/system")
 
-from proto.commit_protocol_pb2 import *
+from two_phase_commit.proto.commit_protocol_pb2 import *
 
 '''
     This class stores the state of a server

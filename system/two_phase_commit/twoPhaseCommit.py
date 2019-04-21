@@ -1,4 +1,7 @@
-from proto.commit_protocol_pb2 import *
+import sys
+sys.path.insert(0, "/home/harshitg/Courses/CS6422/cs6422_project/system")
+
+from two_phase_commit.proto.commit_protocol_pb2 import *
 
 class twoPhaseCommit:
 
@@ -30,7 +33,6 @@ class twoPhaseCommit:
             commit_req_cp_msg = self.prepareCommitReq(task, t.transaction_id, task.task_id)
             # Update data strctures saying that phase 1 msg was sent to that server
             self.messageSendCallback(task.server, commit_req_cp_msg)
-
 
     #CONTROLLER SIDE FUNCTIONS
     def handle_ack(self, trans_id, server, cp_msg):

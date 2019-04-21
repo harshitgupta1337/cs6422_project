@@ -7,7 +7,8 @@ import argparse
 import yaml
 
 from state.server_state import *
-from proto.commit_protocol_pb2 import *
+from two_phase_commit.proto.commit_protocol_pb2 import *
+from two_phase_commit.twoPhaseCommit import *
 
 class RequestHandler(threading.Thread):
     def __init__(self, request_queue, req_queue_mutex, func, *args, **kwargs):
@@ -22,10 +23,11 @@ class RequestHandler(threading.Thread):
             self.callback(req)
 
 class TransactionStruct:
-    def __init__(self, transaction_id, version_map):
+    def __init__(self, transaction_id, version_map, tasks):
         self.dependencies = set()
         self.version_map = version_map
-        self.id = transaction_id
+        self.transaction_id = transaction_id
+        self.tasks = tasks
 
 class Controller:
     def __init__(self, N, w, server_data):
@@ -43,13 +45,20 @@ class Controller:
         self.req_queue_condition = threading.Condition()
         self.request_handler = RequestHandler(self.request_queue, self.req_queue_condition, self.process_request)
         self.request_handler.start()
-        
 
         self.trans_exec_thread = threading.Thread(target=self.transaction_executor)
         self.trans_exec_thread.start()
 
+        self.commit_protocol = twoPhaseCommit("controller", self.send_msg, self.on_transaction_complete)
+
     def __del__(self):
         self.request_handler.join()
+
+    def send_msg(self, dst, msg):
+        print ("Sending message to " , dst)
+
+    def on_transaction_complete(self, trans_id, server_replies):
+        print ("Transaction %d complete"%trans_id)
 
     def select_servers(self, request):
         server_idxs = random.sample(range(self.N), self.w)
@@ -67,12 +76,27 @@ class Controller:
     def update_servers(self, server_idxs):
         version_map = {}
         for server_idx in server_idxs:
-            version = self.server_state[server_idx].version
-            version_map[server_idx] = version
+            self.server_state[server_idx].version.v1 += 1
+            version_map[server_idx] = self.server_state[server_idx].version
 
         transaction_id = self.transaction_id_counter
         self.transaction_id_counter += 1
-        self.submit_transaction(transaction_id, version_map)
+        
+        # Create tasks for transaction
+        
+        tasks = []
+        task_id = 0
+        for server_idx in server_idxs:
+            task = Task()
+            task.task_id = task_id
+            #TODO Assign the real server address here :)
+            task.server = str(server_idx)
+            task.task_type = Task.CREATE_APP
+
+            tasks.append(task)
+            task_id+=1
+
+        self.submit_transaction(transaction_id, version_map, tasks)
 
     def submit_request(self, request):
         self.request_queue.put(request)
@@ -89,21 +113,21 @@ class Controller:
             idx += 1
 
     # Transaction code
-    def submit_transaction(self, transaction_id, version_map):
-        t = TransactionStruct(transaction_id, version_map)
+    def submit_transaction(self, transaction_id, version_map, tasks):
+        t = TransactionStruct(transaction_id, version_map, tasks)
         map_t = version_map.keys()
 
         for e in self.executing_transactions.keys():
             map_e = self.executing_transactions[e].version_map.keys()
             if bool(set(map_t) & set(map_e)):
                 # there is an overlap
-                t.dependencies.add(self.executing_transactions[e].id)
+                t.dependencies.add(self.executing_transactions[e].transaction_id)
 
         for p in self.pending_transactions.keys():
             map_p = self.pending_transactions[p].version_map.keys()
             if bool(set(map_t) & set(map_p)):
                 # there is an overlap
-                t.dependencies.add(self.pending_transactions[p].id)
+                t.dependencies.add(self.pending_transactions[p].transaction_id)
 
         print ("Adding transaction id %d to pending transactions"%transaction_id)
         self.pending_trans_condition.acquire()
@@ -115,7 +139,21 @@ class Controller:
         pass
 
     def process_transaction_success(self, transaction_id, server_replies):
-        pass
+
+        # update the version ???
+        self.executing_transactions.pop(transaction_id, None)
+
+        self.pending_trans_condition.acquire()
+        for pend_trans_id in self.pending_transactions.keys():
+            if transaction_id in self.pending_transactions[pend_trans_id].dependencies:
+                self.pending_transactions[pend_trans_id].remove(transction_id)
+        self.pending_trans_condition.notify()
+        self.pending_trans_condition.release()
+
+    def execute_transaction(self, trans_id, trans_struct):
+        self.executing_transactions[trans_id] = trans_struct
+        print ("Executing %s"%trans_id)
+        self.commit_protocol.submitTransaction(trans_struct)
 
     def transaction_executor(self):
         while True:
@@ -129,9 +167,9 @@ class Controller:
                 self.pending_trans_condition.wait()
             else:
                 # process the transactions in to_execute
-                self.executing_transactions[pend_trans_id] = self.pending_transactions[pend_trans_id]
+                trans_struct = self.pending_transactions[pend_trans_id]
                 self.pending_transactions.pop(pend_trans_id, None)
-                print ("Executing %s"%pend_trans_id)
+                self.execute_transaction(pend_trans_id, trans_struct)
             self.pending_trans_condition.release()        
 
 def merge_args(yaml_conf, cmdline_args):
