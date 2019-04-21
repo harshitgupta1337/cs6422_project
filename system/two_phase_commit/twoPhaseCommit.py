@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "/home/harshitg/Courses/CS6422/cs6422_project/system")
 
-from two_phase_commit.proto.commit_protocol_pb2 import *
+from proto.commit_protocol_pb2 import *
 
 class twoPhaseCommit:
 

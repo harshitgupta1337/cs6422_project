@@ -1,16 +1,28 @@
 syntax = "proto2";
 option optimize_for = LITE_RUNTIME;
+import "proto/commit-protocol.proto";
 
 message InitServer {
     optional string server_url = 1;
+    optional uint32 cpu = 2;
+    optional uint32 memory = 3;
+}
+
+message AppRequest {
+    optional string app_id = 1;
 }
 
 message Message {
     enum Type {
         INIT_SERVER = 1;
+        APP_REQ = 2;
+        COMMIT_PROTOCOL = 3;
     }
 
     required Type type = 1;
-    optional InitServer init_server = 2;
+    optional string src = 2;
+    optional InitServer init_server = 3;
+    optional AppRequest app_request = 4;
+    optional CommitProtocolMessage cp_msg = 5;
 }
 

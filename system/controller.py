@@ -7,7 +7,7 @@ import argparse
 import yaml
 
 from state.server_state import *
-from two_phase_commit.proto.commit_protocol_pb2 import *
+#from two_phase_commit.proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
 from comm.server_instance import *
 from proto.messages_pb2 import *
@@ -32,20 +32,19 @@ class TransactionStruct:
         self.tasks = tasks
 
 class Controller:
-    def __init__(self, N, w, server_data, url):
+    def __init__(self, N, w, url):
 
         self.url = url
         self.N = N
         self.w = w
         self.server_state = {}
         self.transaction_id_counter = 0
-        self.init_servers(server_data)
+        #self.init_servers(server_data)
         self.executing_transactions = {}
         self.pending_transactions = {}
         self.pending_trans_condition = threading.Condition()
 
-        self.server_socket = Server(self.url, self.on_recv_msg)
-        self.server_socket.start()
+        self.commit_protocol = twoPhaseCommit("controller", self.send_cp_msg, self.on_transaction_complete)
 
         self.request_queue = queue.Queue()
         self.req_queue_condition = threading.Condition()
@@ -55,18 +54,39 @@ class Controller:
         self.trans_exec_thread = threading.Thread(target=self.transaction_executor)
         self.trans_exec_thread.start()
 
-        self.commit_protocol = twoPhaseCommit("controller", self.send_msg, self.on_transaction_complete)
+        self.server_socket = Server(self.url, self.on_recv_msg)
+        self.server_socket.start()
 
     def __del__(self):
         self.request_handler.join()
 
+    def on_init_server_msg(self, msg):
+        init_server = msg.init_server
+        server_url = init_server.server_url
+        server_idx = len(self.server_state)
+        # TODO need to add a lock here 
+        self.server_state[server_idx] = ServerState(server_idx, init_server.cpu, init_server.memory, server_url)
+        print ("Registered server %s with CPU=%d memory=%d"%(server_url, init_server.cpu, init_server.memory))
+
     def on_recv_msg(self, src, data):
+        print (src)
         msg = Message()
         msg.ParseFromString(data)
         print ("Received msg of type %d"%(msg.type))
+        if msg.type == Message.INIT_SERVER:
+            self.on_init_server_msg(msg)
+        if msg.type == Message.APP_REQ:
+            self.on_app_req(msg)
+
+    def send_cp_msg(self, dst, cp_msg):
+        msg = Message()
+        msg.type = Message.COMMIT_PROTOCOL
+        msg.cp_msg.CopyFrom(cp_msg)
+        self.send_msg(dst, msg)
     
     def send_msg(self, dst, msg):
         print ("Sending message to " , dst)
+        self.server_socket.sendMsg(dst, msg.SerializeToString())
 
     def on_transaction_complete(self, trans_id, server_replies):
         print ("Transaction %d complete"%trans_id)
@@ -101,7 +121,7 @@ class Controller:
             task = Task()
             task.task_id = task_id
             #TODO Assign the real server address here :)
-            task.server = str(server_idx)
+            task.server = self.server_state[server_idx].server_url
             task.task_type = Task.CREATE_APP
 
             tasks.append(task)
@@ -109,8 +129,13 @@ class Controller:
 
         self.submit_transaction(transaction_id, version_map, tasks)
 
-    def submit_request(self, request):
-        self.request_queue.put(request)
+    def on_app_req(self, msg):
+        
+        if len(self.server_state) < self.N:
+            print ("Unable to submit request")
+            return
+        print ("Submitting request")
+        self.request_queue.put(msg)
 
     def init_servers(self, server_data_file):
         yaml_stream = None
@@ -188,15 +213,15 @@ def merge_args(yaml_conf, cmdline_args):
         yaml_conf['w'] = cmdline_args.w
     if cmdline_args.N:
         yaml_conf['N'] = cmdline_args.N
-    if cmdline_args.server_data:
-        yaml_conf['server_data'] = cmdline_args.server_data
+    #if cmdline_args.server_data:
+    #    yaml_conf['server_data'] = cmdline_args.server_data
     return yaml_conf
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Independent controller instance')
     parser.add_argument('-N', dest='N', type=int, help='Number of servers (overrides conf file)')
     parser.add_argument('-w', dest='w', type=int, help='Size of write set  (overrides conf file)')
-    parser.add_argument('--server-conf', dest='server_data', type=str, help='Path to server conf  (overrides conf file)')
+    #parser.add_argument('--server-conf', dest='server_data', type=str, help='Path to server conf  (overrides conf file)')
     parser.add_argument('--conf', dest='conf', type=str, help='Path to config file')
     args = parser.parse_args()
 
@@ -207,7 +232,9 @@ if __name__ == "__main__":
 
     args_dict = merge_args(yaml_conf, args)
     
-    controller = Controller(args_dict['N'], args_dict['w'], args_dict['server_data'], args_dict['url'])
+    controller = Controller(args_dict['N'], args_dict['w'], args_dict['url'])
+    #controller = Controller(args_dict['N'], args_dict['w'], args_dict['server_data'], args_dict['url'])
+
     while True:
-        #controller.submit_request(None)
+        controller.submit_request(None)
         time.sleep (1)

@@ -38,6 +38,7 @@ class ClientWorker(threading.Thread):
         # Polling is used to check for sockets with data before reading because socket.recv() is blocking.
         while True:
             # Poll for 5 seconds. Return any sockets with data to be read.
+            print ("polling begin")
             sockets = dict(poller.poll(5000))
             
             # If socket has data to be read.
@@ -57,6 +58,7 @@ class ClientWorker(threading.Thread):
 
     def receive(self, socket):
         #Recieve and return data through provided socket.
+        print ("Trying to receive")
         return socket.recv()
 
     def get_connection(self):

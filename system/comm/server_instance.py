@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import threading
-
 import zmq
+from zmq.devices import ProcessDevice
 
 class Server(object):
     def __init__(self, url, msg_recv_callback):
@@ -13,7 +13,6 @@ class Server(object):
     def start(self):
         
         #Instantiate workers, Accept client connections, distribute computation requests among workers, route computed results back to clients.
-        
         # Front facing socket to accept client connections.
         socket_front = self.zmq_context.socket(zmq.ROUTER)
         print ("Binding to " , self.url)
@@ -25,10 +24,12 @@ class Server(object):
         
         self.worker = Worker(self.zmq_context, self)
         self.worker.start()
+        print ("started server socket worker")
         
         # Read a client's socket ID and request. => Send socket ID and request to a worker. => Read a client's socket ID and result from a worker. => Route result back to the client using socket ID.
         zmq.device(zmq.QUEUE, socket_front, socket_back)
-
+        print ("setup zmq device")
+        
     def sendMsg(self, client_id, msg):
         self.worker.sendMsg(client_id, msg)
 
@@ -53,8 +54,9 @@ class Worker(threading.Thread):
 
     # this message is not thread-safe
     def sendMsg(self, client_id, msg):
-        self.socket.send(client_id, zmq.SNDMORE)
-        self.socket.send_string(msg)
+        self.socket.send(client_id.encode('ascii'), zmq.SNDMORE)
+        print (msg)
+        self.socket.send(msg)
 
     def processMessage(self, client_id, msg):
         self.parent.msg_recv_callback(client_id, msg)
