@@ -1,0 +1,16 @@
+syntax = "proto2";
+option optimize_for = LITE_RUNTIME;
+
+message InitServer {
+    optional string server_url = 1;
+}
+
+message Message {
+    enum Type {
+        INIT_SERVER = 1;
+    }
+
+    required Type type = 1;
+    optional InitServer init_server = 2;
+}
+

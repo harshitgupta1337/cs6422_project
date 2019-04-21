@@ -52,7 +52,8 @@ class ClientWorker(threading.Thread):
     def send(self, data):
         #Send data through provided socket.
         print ("Sending data")
-        self.socket.send(data.encode('ascii'))
+        #self.socket.send(data.encode('ascii'))
+        self.socket.send(data)
 
     def receive(self, socket):
         #Recieve and return data through provided socket.

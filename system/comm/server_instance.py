@@ -5,9 +5,10 @@ import threading
 import zmq
 
 class Server(object):
-    def __init__(self, msg_recv_callback):
+    def __init__(self, url, msg_recv_callback):
         self.zmq_context = zmq.Context()
         self.msg_recv_callback = msg_recv_callback
+        self.url = url
     
     def start(self):
         
@@ -15,7 +16,8 @@ class Server(object):
         
         # Front facing socket to accept client connections.
         socket_front = self.zmq_context.socket(zmq.ROUTER)
-        socket_front.bind('tcp://127.0.0.1:5001')
+        print ("Binding to " , self.url)
+        socket_front.bind(self.url)
         
         # Backend socket to distribute work.
         socket_back = self.zmq_context.socket(zmq.DEALER)
@@ -46,7 +48,8 @@ class Worker(threading.Thread):
             # First string recieved is socket ID of client
             client_id = self.socket.recv()
             request = self.socket.recv()
-            self.processMessage(client_id, request.decode('ascii'))
+            #self.processMessage(client_id, request.decode('ascii'))
+            self.processMessage(client_id, request)
 
     # this message is not thread-safe
     def sendMsg(self, client_id, msg):

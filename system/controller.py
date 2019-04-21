@@ -9,6 +9,8 @@ import yaml
 from state.server_state import *
 from two_phase_commit.proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
+from comm.server_instance import *
+from proto.messages_pb2 import *
 
 class RequestHandler(threading.Thread):
     def __init__(self, request_queue, req_queue_mutex, func, *args, **kwargs):
@@ -30,8 +32,9 @@ class TransactionStruct:
         self.tasks = tasks
 
 class Controller:
-    def __init__(self, N, w, server_data):
+    def __init__(self, N, w, server_data, url):
 
+        self.url = url
         self.N = N
         self.w = w
         self.server_state = {}
@@ -40,6 +43,9 @@ class Controller:
         self.executing_transactions = {}
         self.pending_transactions = {}
         self.pending_trans_condition = threading.Condition()
+
+        self.server_socket = Server(self.url, self.on_recv_msg)
+        self.server_socket.start()
 
         self.request_queue = queue.Queue()
         self.req_queue_condition = threading.Condition()
@@ -54,6 +60,11 @@ class Controller:
     def __del__(self):
         self.request_handler.join()
 
+    def on_recv_msg(self, src, data):
+        msg = Message()
+        msg.ParseFromString(data)
+        print ("Received msg of type %d"%(msg.type))
+    
     def send_msg(self, dst, msg):
         print ("Sending message to " , dst)
 
@@ -196,7 +207,7 @@ if __name__ == "__main__":
 
     args_dict = merge_args(yaml_conf, args)
     
-    controller = Controller(args_dict['N'], args_dict['w'], args_dict['server_data'])
+    controller = Controller(args_dict['N'], args_dict['w'], args_dict['server_data'], args_dict['url'])
     while True:
-        controller.submit_request(None)
+        #controller.submit_request(None)
         time.sleep (1)

@@ -10,6 +10,7 @@ from state.server_state import *
 from two_phase_commit.proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
 from comm.client_instance import *
+from proto.messages_pb2 import *
 
 class Server:
     def __init__(self, url, controller_url):
@@ -24,9 +25,10 @@ class Server:
 
     def init_connection(self) :
         #Prepare init message
-        init_msg = "INIT"
-        self.client_socket.sendMsg(init_msg)
-        
+        init_msg = Message()
+        init_msg.type = Message.INIT_SERVER
+        init_msg.init_server.server_url = self.url
+        self.client_socket.sendMsg(init_msg.SerializeToString())
 
 def merge_args(yaml_conf, cmdline_args):
     #if cmdline_args.url:
