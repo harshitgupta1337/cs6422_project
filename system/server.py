@@ -20,8 +20,16 @@ class Server:
         self.controller_url = controller_url
         self.client_socket = Client(url, self.on_msg_recv, self.controller_url)
 
-        self.commit_protocol = twoPhaseCommit(self.url, self.send_cp_msg, None)
+        self.commit_protocol = twoPhaseCommit(self.url, self.send_cp_msg, None, self.command_arrival)
         self.init_connection()
+
+    def command_arrival(self, cp_msg):
+        print ("Command arrived on server ", self.url)
+        trans_id = cp_msg.transaction_id
+        cmd_id = cp_msg.commit_req.task_id
+        server_reply = ServerReply()
+        server_reply.some_field = 0
+        self.commit_protocol.commandComplete(trans_id, cmd_id, True, server_reply)
 
     def send_cp_msg(self, dst, cp_msg):
         msg = Message()

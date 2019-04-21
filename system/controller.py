@@ -44,7 +44,7 @@ class Controller:
         self.pending_transactions = {}
         self.pending_trans_condition = threading.Condition()
 
-        self.commit_protocol = twoPhaseCommit("controller", self.send_cp_msg, self.on_transaction_complete)
+        self.commit_protocol = twoPhaseCommit("controller", self.send_cp_msg, self.on_transaction_complete, None)
 
         self.request_queue = queue.Queue()
         self.req_queue_condition = threading.Condition()
@@ -77,6 +77,9 @@ class Controller:
             self.on_init_server_msg(msg)
         if msg.type == Message.APP_REQ:
             self.on_app_req(msg)
+        if msg.type == Message.COMMIT_PROTOCOL:
+            cp_msg = msg.cp_msg
+            self.commit_protocol.onRcvMsg(msg.src, cp_msg)
 
     def send_cp_msg(self, dst, cp_msg):
         msg = Message()

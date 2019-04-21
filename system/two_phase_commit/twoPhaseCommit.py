@@ -5,10 +5,11 @@ from proto.commit_protocol_pb2 import *
 
 class twoPhaseCommit:
 
-    def __init__(self, name, messageSendCallback, transactionCompleteCallback):
+    def __init__(self, name, messageSendCallback, transactionCompleteCallback, commandArrival):
         self.name = name
         self.messageSendCallback = messageSendCallback
         self.transactionCompleteCallback = transactionCompleteCallback
+        self.commandArrival = commandArrival
         self.transaction_data = {}
         self.phase1_replies = {}
         self.phase2_replies = {}
@@ -98,10 +99,14 @@ class twoPhaseCommit:
     def handle_commit_req(self, trans_id, server, cp_msg): 
         print ("SERVER %s: Commit request has been received"%server)
 		#Assuming that transaction has always completed successfully by the time the commit request arrives
+        self.commandArrival(cp_msg)
+        '''
+        Transaction completion callbacks should be called in the controller
         if(cp_msg.success == True):
             self.txnSuccessCallback(trans_id, server)
         else: 
             self.txnFailCallback(trans_id, server)
+        '''
 
     # Txn wasn't completed by server, next step is to disagree to commit request
     def txnFailCallback(self, trans_id, server):
@@ -111,6 +116,20 @@ class twoPhaseCommit:
     def txnSuccessCallback(self, trans_id, server):
         print("Transaction %d was successfully completed by the server %s"%(trans_id, server))
 
+
+    def commandComplete(self, trans_id, cmd_id, success, server_reply):
+        cp_msg = CommitProtocolMessage()
+        cp_msg.transaction_id = trans_id
+        if success:
+            cp_msg.type = CommitProtocolMessage.AGREEMENT
+            cp_msg.agreement.task_id = cmd_id
+            cp_msg.agreement.server_reply.CopyFrom(server_reply)
+        else:
+            cp_msg.type = CommitProtocolMessage.DISAGREEMENT
+            cp_msg.disagreement.task_id = cmd_id
+            cp_msg.disagreement.server_reply.CopyFrom(server_reply)
+
+        self.messageSendCallback("controller", cp_msg)
 			
     #GENERAL FUNCTIONS
     def onRcvMsg(self, msg_src, cp_msg):
@@ -135,184 +154,3 @@ class twoPhaseCommit:
             assert cp_msg.HasField("disagreement")
             self.handle_disagreement(trans_id, msg_src, cp_msg)
 
-def commHandler(server, msg):
-    print ("Now I will send a message to server %s"%server)
-
-def trans_complete(trans_id):
-    print ("Transaction %d was complete"%trans_id)
-
-if __name__ == "__main__":
-
-	num_tasks = 3
-	cp_2pc = twoPhaseCommit("2pc", commHandler, trans_complete)
-	# TEST CASE 1: Transasction is successful
-	print("############################### TEST CASE 1: TRANSACTION IS SUCCESSFUL #################################################")
-    
-    # Step 1 : controller submits a transaction
-	print("######## Testing controller submitting transaction ########")
-	trans_id = 1
-	trans = Transaction()
-	trans.transaction_id = trans_id
-
-	
-	for i in range(num_tasks):
-		task = trans.tasks.add()
-		task.task_id = i
-		task.server = "10.100.1.20%d"%i
-		task.task_type = Task.CREATE_APP
-
-	cp_2pc.submitTransaction(trans)
-	
-	# step 1.5 : server executes transaction
-	
-	# step 1.75 : controller sends commit request 
-	print("######## Testing controller sending commit requests ########")
-
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.COMMIT_REQ
-		
-		req = CommitReq()
-		req.task_id = i
-		#Added a new attribute for testing purposes (user will decide whether the txn fails or succeeds for now)
-		#req.success = True
-		cp_msg.commit_req.CopyFrom(req)
-		cp_msg.success = True
-		cp_2pc.onRcvMsg(server, cp_msg)
-		
-    # step 2 : server submits an agreement
-	print("######## Testing server submitting agreement ########")
-
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.AGREEMENT
-		
-		agr = Agreement()
-		agr.task_id = i
-		cp_msg.agreement.CopyFrom(agr)
-		cp_2pc.onRcvMsg(server, cp_msg)
-	
-	# step 2.5 : controller checks agreements and commits transaction
-	print("####### Testing controller sending commit order to all servers #######")
-	
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.COMMIT
-
-		com = Commit()
-		com.task_id = i
-		cp_msg.commit.CopyFrom(com)
-		cp_2pc.onRcvMsg(server, cp_msg)
-	
-    # step 3 : submitting an ack
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.ACK
-
-		ack = Ack()
-		ack.task_id = i
-		cp_msg.ack.CopyFrom(ack)
-
-		cp_2pc.onRcvMsg(server, cp_msg)
-		
-		
-		
-			
-	# TEST CASE 2: Transasction is not successful
-	print("############################### TEST CASE 2: TRANSACTION IS UNSUCCESSFUL #################################################")
-	cp_2pc = twoPhaseCommit("2pc", commHandler, trans_complete)
-    
-    # Step 1 : controller submits a transaction
-	print("######## Testing controller submitting transaction ########")
-	trans_id = 1
-	trans = Transaction()
-	trans.transaction_id = trans_id
-
-	num_tasks = 3
-	for i in range(num_tasks):
-		task = trans.tasks.add()
-		task.task_id = i
-		task.server = "10.100.1.20%d"%i
-		task.task_type = Task.CREATE_APP
-
-	cp_2pc.submitTransaction(trans)
-	
-	# step 1.5 : server executes transaction
-	
-	# step 1.75 : controller sends commit request 
-	print("######## Testing controller sending commit requests ########")
-
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.COMMIT_REQ
-		
-		req = CommitReq()
-		req.task_id = i
-		# Only server 10.100.1.202 will not complete the txn and therefore fail
-		cp_msg.commit_req.CopyFrom(req)
-		if(i == 2): cp_msg.success = False
-		else: cp_msg.success = True
-		cp_2pc.onRcvMsg(server, cp_msg)
-		
-    # step 2 : one server submits a disagreement
-	print("######## Testing servers submitting two agreements and a disagreement ########")
-
-	# two agreements
-	for i in range(num_tasks - 1):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-
-		cp_msg.type = CommitProtocolMessage.AGREEMENT
-		agr = Agreement()
-		agr.task_id = i
-		cp_msg.agreement.CopyFrom(agr)
-		cp_2pc.onRcvMsg(server, cp_msg)
-		
-	# one disagreement
-	server =  "10.100.1.202"
-	cp_msg = CommitProtocolMessage()
-	cp_msg.transaction_id = trans_id
-
-	cp_msg.type = CommitProtocolMessage.DISAGREEMENT
-	dis = Disagreement()
-	dis.task_id = i
-	cp_msg.disagreement.CopyFrom(dis)
-	cp_2pc.onRcvMsg(server, cp_msg)
-	
-	# step 2.5 : controller checks agreements and aborts transaction
-	print("####### Testing controller sending abort order to all servers #######")
-	
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.ABORT
-
-		ab = Abort()
-		com.task_id = i
-		cp_msg.abort.CopyFrom(ab)
-		cp_2pc.onRcvMsg(server, cp_msg)
-	
-    # step 3 : submitting an ack
-	for i in range(num_tasks):
-		server =  "10.100.1.20%d"%i
-		cp_msg = CommitProtocolMessage()
-		cp_msg.transaction_id = trans_id
-		cp_msg.type = CommitProtocolMessage.ACK
-
-		ack = Ack()
-		ack.task_id = i
-		cp_msg.ack.CopyFrom(ack)
-
-		cp_2pc.onRcvMsg(server, cp_msg)
