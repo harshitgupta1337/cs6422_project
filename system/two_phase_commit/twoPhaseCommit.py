@@ -43,7 +43,7 @@ class twoPhaseCommit:
         self.phase2_replies[trans_id][server] = cp_msg
 
         if self.phase2_complete(trans_id):
-            self.transactionCompleteCallback(trans_id)
+            self.transactionCompleteCallback(trans_id, self.phase1_replies[trans_id])
 			
     def phase1_complete(self, trans_id):
         if(len(self.phase1_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks)):
@@ -56,29 +56,44 @@ class twoPhaseCommit:
     def handle_agreement(self, trans_id, server, cp_msg):
         print ("Received Agreement for trans Id %d from server %s" %(trans_id, server))
         if trans_id not in self.phase1_replies: self.phase1_replies[trans_id] = {}
-        self.phase1_replies[trans_id][server] = CommitProtocolMessage.AGREEMENT
+        self.phase1_replies[trans_id][server] = cp_msg
 		
         if(len(self.phase1_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks)): self.start_phase2(trans_id)
    
     def handle_disagreement(self, trans_id, server, cp_msg):
         print ("Received disagreement for trans Id %d from server %s" %(trans_id, server))
         if(trans_id not in self.phase1_replies): self.phase1_replies[trans_id] = {}
-        self.phase1_replies[trans_id][server] = CommitProtocolMessage.DISAGREEMENT
+        self.phase1_replies[trans_id][server] = cp_msg
 
         if(len(self.phase1_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks)): self.start_phase2(trans_id)
 
     
     def start_phase2(self, trans_id):
 		# Need to check whether all servers replied with agreement or not
-	    transactionSuccess = True
-	    for server in self.phase1_replies[trans_id].keys():
-	        if(self.phase1_replies[trans_id][server] == CommitProtocolMessage.DISAGREEMENT):
-	            transactionSuccess = False
-	            print("CONTROLLER: Server %s disagreed to commit. Sending abort order to all servers..."%server)
-	        if(self.phase1_replies[trans_id][server] == CommitProtocolMessage.AGREEMENT):
-	            print("CONTROLLER: Server %s agreed to commit. Waiting for other servers to respond..."%server)
+        transactionSuccess = True
+        server_to_cmd_id = {}
+        for server in self.phase1_replies[trans_id].keys():
+            if(self.phase1_replies[trans_id][server].type == CommitProtocolMessage.DISAGREEMENT):
+                server_to_cmd_id[server] = self.phase1_replies[trans_id][server].disagreement.task_id
+                transactionSuccess = False
+                print("CONTROLLER: Server %s disagreed to commit. Sending abort order to all servers..."%server)
+            if(self.phase1_replies[trans_id][server].type == CommitProtocolMessage.AGREEMENT):
+                server_to_cmd_id[server] = self.phase1_replies[trans_id][server].agreement.task_id
+                print("CONTROLLER: Server %s agreed to commit. Waiting for other servers to respond..."%server)
 				
-	    if(transactionSuccess): print("CONTROLLER: All servers agreed. Ready to start phase 2")
+        if(transactionSuccess): print("CONTROLLER: All servers agreed. Ready to start phase 2")
+        
+        for server in self.phase1_replies[trans_id].keys():
+            cpMsg = CommitProtocolMessage()
+            cpMsg.transaction_id = trans_id
+            if transactionSuccess:
+                cpMsg.type = CommitProtocolMessage.COMMIT
+                cpMsg.commit.task_id = server_to_cmd_id[server]
+            else:
+                cpMsg.type = CommitProtocolMessage.ABORT
+                cpMsg.abort.task_id = server_to_cmd_id[server]
+                
+            self.messageSendCallback(server, cpMsg)
 
     def phase2_complete(self, trans_id) :
         if len(self.phase2_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks):
@@ -89,9 +104,19 @@ class twoPhaseCommit:
     #SERVER SIDE FUNCTIONS
     def handle_commit(self, trans_id, server, cp_msg):
         print("SERVER %s: Received commit order from controller. Commit transaction with id %d" %(server, trans_id))
+        cp_msg = CommitProtocolMessage()
+        cp_msg.type = CommitProtocolMessage.ACK
+        cp_msg.ack.task_id = cp_msg.commit.task_id
+        cp_msg.transaction_id = trans_id
+        self.messageSendCallback(server, cp_msg)
 
     def handle_abort(self, trans_id, server, cp_msg): 
-        print ("SERVER %s: Received abort order from controller. Abort transaction with id %d" %(server, trans_id))                            
+        print ("SERVER %s: Received abort order from controller. Abort transaction with id %d" %(server, trans_id)) 
+        cp_msg = CommitProtocolMessage()
+        cp_msg.type = CommitProtocolMessage.ACK
+        cp_msg.ack.task_id = cp_msg.commit.task_id
+        cp_msg.transaction_id = trans_id
+        self.messageSendCallback(server, cp_msg)
 
     # For now we just flip a coin to determine if a txn is completed or not, by the time the server gets the commit request from the controller,
     # as that is out of the scope for our project. Being realistic, 

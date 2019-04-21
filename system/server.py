@@ -34,6 +34,7 @@ class Server:
     def send_cp_msg(self, dst, cp_msg):
         msg = Message()
         msg.type = Message.COMMIT_PROTOCOL
+        msg.src = self.url
         msg.cp_msg.CopyFrom(cp_msg)
         self.client_socket.sendMsg(msg.SerializeToString())
 
