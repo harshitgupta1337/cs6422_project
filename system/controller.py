@@ -93,6 +93,14 @@ class Controller:
 
     def on_transaction_complete(self, trans_id, server_replies):
         print ("Transaction %d complete"%trans_id)
+        failure = False
+        for server in server_replies.keys():
+            if server_replies[server].type == CommitProtocolMessage.DISAGREEMENT:
+                failure = True
+        if failure:
+            self.process_transaction_failure(trans_id, server_replies)
+        else:
+            self.process_transaction_success(trans_id, server_replies)
 
     def select_servers(self, request):
         server_idxs = random.sample(range(self.N), self.w)
@@ -174,10 +182,13 @@ class Controller:
         self.pending_trans_condition.notify()
         self.pending_trans_condition.release()
 
+
     def process_transaction_failure(self, transaction_id, server_replies):
+        # TODO mutual exclusion with request handling thread
         pass
 
     def process_transaction_success(self, transaction_id, server_replies):
+        # TODO mutual exclusion with request handling thread
 
         # update the version ???
         self.executing_transactions.pop(transaction_id, None)
