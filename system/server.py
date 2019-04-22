@@ -8,23 +8,36 @@ import yaml
 
 from threading import Lock
 
+from numpy.random import poisson
+
 from state.server_state import *
 from proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
 from comm.client_instance import *
 from proto.messages_pb2 import *
+from poisson_process import *
 
 class Server:
-    def __init__(self, url, controller_url, cpu, memory):
+    def __init__(self, url, controller_url, cpu, memory, auto_rate=1):
         self.url = url
         self.controller_url = controller_url
         self.client_socket = Client(url, self.on_msg_recv, self.controller_url)
+        self.auto_rate = auto_rate
 
         self.state = ServerState(0, cpu, memory, url)
         self.state_lock = Lock()
 
         self.commit_protocol = twoPhaseCommit(self.url, self.send_cp_msg, None, self.command_arrival)
         self.init_connection()
+
+        self.auto_thread = PoissonProcess(self.auto_rate, self.auto_update)
+        self.auto_thread.start()
+
+    def auto_update(self):
+        print ("Updating state of server autonomously")
+        self.state_lock.acquire()
+        self.state.version.v2+=1
+        self.state_lock.release()
 
     def version_happened_before(self, version1, version2):
         if version1.v1 <= version2.v1 and version1.v2 <= version2.v2:
