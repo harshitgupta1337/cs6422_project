@@ -12,6 +12,12 @@ ADD https://github.com/google/protobuf/releases/download/v3.6.1/protoc-3.6.1-lin
 RUN pip install zmq
 
 
+#running shellscripts within docker
+ADD test_run.sh /
+RUN chmod +x /test_run.sh
+
+
+
 #change the script in the following command
 CMD [ "python", "./server_instance.py" ]
 
