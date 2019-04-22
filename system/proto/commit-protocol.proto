@@ -21,10 +21,11 @@ message Task { // This structure will be changed later, dont worry now
     optional uint32 task_id = 1;
     optional string server = 2;
     optional Type task_type = 3;
+    optional Version version = 4;
     
-    optional DeleteAppTask delete_app_task = 4;
-    optional CreateAppTask create_app_task = 5;
-    optional ModifyResourceAllocTask modify_resource_alloc_task = 6;
+    optional DeleteAppTask delete_app_task = 5;
+    optional CreateAppTask create_app_task = 6;
+    optional ModifyResourceAllocTask modify_resource_alloc_task = 7;
 }
 
 message Transaction {
@@ -38,13 +39,12 @@ message Version {
 }
 
 message ServerReply {
-    optional uint32 some_field = 1;
+    optional Version curr_version = 1;
 }
 
 message CommitReq {
     optional uint32 task_id = 1;
     optional Task task = 2;
-    optional Version version = 3;
 }
 
 message Agreement {

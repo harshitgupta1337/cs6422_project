@@ -6,6 +6,8 @@ import random
 import argparse
 import yaml
 
+from threading import Lock
+
 from state.server_state import *
 from proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
@@ -15,21 +17,39 @@ from proto.messages_pb2 import *
 class Server:
     def __init__(self, url, controller_url, cpu, memory):
         self.url = url
-        self.cpu = cpu
-        self.memory = memory
         self.controller_url = controller_url
         self.client_socket = Client(url, self.on_msg_recv, self.controller_url)
+
+        self.state = ServerState(0, cpu, memory, url)
+        self.state_lock = Lock()
 
         self.commit_protocol = twoPhaseCommit(self.url, self.send_cp_msg, None, self.command_arrival)
         self.init_connection()
 
+    def version_happened_before(self, version1, version2):
+        if version1.v1 <= version2.v1 and version1.v2 <= version2.v2:
+            return True
+        return False
+
     def command_arrival(self, cp_msg):
         print ("Command arrived on server ", self.url)
+        self.state_lock.acquire()
         trans_id = cp_msg.transaction_id
         cmd_id = cp_msg.commit_req.task_id
+        task = cp_msg.commit_req.task
+
+        if self.version_happened_before(self.state.version, task.version):
+            # Command will be successful
+            self.state.v1 = task.version.v1
+            self.state.v2 = task.version.v2
+            cmd_success = True
+        else:
+            cmd_success = False
+
         server_reply = ServerReply()
-        server_reply.some_field = 0
-        self.commit_protocol.commandComplete(trans_id, cmd_id, True, server_reply)
+        server_reply.curr_version.CopyFrom(self.state.version)
+        self.commit_protocol.commandComplete(trans_id, cmd_id, cmd_success, server_reply)
+        self.state_lock.release()
 
     def send_cp_msg(self, dst, cp_msg):
         msg = Message()
@@ -50,9 +70,13 @@ class Server:
         init_msg = Message()
         init_msg.type = Message.INIT_SERVER
         init_msg.init_server.server_url = self.url
-        init_msg.init_server.cpu = self.cpu
-        init_msg.init_server.memory = self.memory
+        init_msg.init_server.cpu = self.state.max_cpu
+        init_msg.init_server.memory = self.state.max_memory
         self.client_socket.sendMsg(init_msg.SerializeToString())
+
+    def perform_auto_alloc(self):
+        self.state_lock.acquire()
+        self.state_lock.release()
 
 def merge_args(yaml_conf, cmdline_args):
     if cmdline_args.cpu:

@@ -134,6 +134,7 @@ class Controller:
             #TODO Assign the real server address here :)
             task.server = self.server_state[server_idx].server_url
             task.task_type = Task.CREATE_APP
+            task.version.CopyFrom(self.server_state[server_idx].version)
 
             tasks.append(task)
             task_id+=1
