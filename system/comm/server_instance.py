@@ -55,14 +55,12 @@ class Worker(threading.Thread):
     # this message is not thread-safe
     def sendMsg(self, client_id, msg):
         self.socket.send(client_id.encode('ascii'), zmq.SNDMORE)
-        print (msg)
         self.socket.send(msg)
 
     def processMessage(self, client_id, msg):
         self.parent.msg_recv_callback(client_id, msg)
 
 def msg_recvd(client_id, msg):
-    print ("Msg received from client_id = %s; message = %s" % (client_id, msg))
     server.sendMsg(client_id, "ACK")
 
 if __name__ == '__main__':

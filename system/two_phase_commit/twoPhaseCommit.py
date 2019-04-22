@@ -37,31 +37,40 @@ class twoPhaseCommit:
 
     #CONTROLLER SIDE FUNCTIONS
     def handle_ack(self, trans_id, server, cp_msg):
-        print ("Received Ack for trans Id %d from server %s" %(trans_id, server))
+        #print ("Received Ack for trans Id %d from server %s" %(trans_id, server))
         if trans_id not in self.phase2_replies:
             self.phase2_replies[trans_id] = {}
         self.phase2_replies[trans_id][server] = cp_msg
 
         if self.phase2_complete(trans_id):
-            self.transactionCompleteCallback(trans_id, self.phase1_replies[trans_id])
+            success = True
+            server_replies = {}
+            for server in self.phase1_replies[trans_id].keys():
+                if self.phase1_replies[trans_id][server].type == CommitProtocolMessage.DISAGREEMENT:
+                    success = False
+                    server_replies[server] = self.phase1_replies[trans_id][server].disagreement.server_reply
+                if self.phase1_replies[trans_id][server].type == CommitProtocolMessage.AGREEMENT:
+                    server_replies[server] = self.phase1_replies[trans_id][server].agreement.server_reply
+
+            self.transactionCompleteCallback(trans_id, success, server_replies)
 			
     def phase1_complete(self, trans_id):
         if(len(self.phase1_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks)):
-            print("Phase 1 complete")
+            #print("Phase 1 complete")
             return True
         else:
-            print("Phase 1 incomplete")
+            #print("Phase 1 incomplete")
             return False
 				
     def handle_agreement(self, trans_id, server, cp_msg):
-        print ("Received Agreement for trans Id %d from server %s" %(trans_id, server))
+        #print ("Received Agreement for trans Id %d from server %s" %(trans_id, server))
         if trans_id not in self.phase1_replies: self.phase1_replies[trans_id] = {}
         self.phase1_replies[trans_id][server] = cp_msg
 		
         if(len(self.phase1_replies[trans_id].keys()) == len(self.transaction_data[trans_id].tasks)): self.start_phase2(trans_id)
    
     def handle_disagreement(self, trans_id, server, cp_msg):
-        print ("Received disagreement for trans Id %d from server %s" %(trans_id, server))
+        #print ("Received disagreement for trans Id %d from server %s" %(trans_id, server))
         if(trans_id not in self.phase1_replies): self.phase1_replies[trans_id] = {}
         self.phase1_replies[trans_id][server] = cp_msg
 
@@ -76,13 +85,11 @@ class twoPhaseCommit:
             if(self.phase1_replies[trans_id][server].type == CommitProtocolMessage.DISAGREEMENT):
                 server_to_cmd_id[server] = self.phase1_replies[trans_id][server].disagreement.task_id
                 transactionSuccess = False
-                print("CONTROLLER: Server %s disagreed to commit. Sending abort order to all servers..."%server)
+                #print("CONTROLLER: Server %s disagreed to commit. Sending abort order to all servers..."%server)
             if(self.phase1_replies[trans_id][server].type == CommitProtocolMessage.AGREEMENT):
                 server_to_cmd_id[server] = self.phase1_replies[trans_id][server].agreement.task_id
-                print("CONTROLLER: Server %s agreed to commit. Waiting for other servers to respond..."%server)
+                #print("CONTROLLER: Server %s agreed to commit. Waiting for other servers to respond..."%server)
 				
-        if(transactionSuccess): print("CONTROLLER: All servers agreed. Ready to start phase 2")
-        
         for server in self.phase1_replies[trans_id].keys():
             cpMsg = CommitProtocolMessage()
             cpMsg.transaction_id = trans_id
@@ -103,7 +110,7 @@ class twoPhaseCommit:
 			
     #SERVER SIDE FUNCTIONS
     def handle_commit(self, trans_id, server, cp_msg):
-        print("SERVER %s: Received commit order from controller. Commit transaction with id %d" %(server, trans_id))
+        #print("SERVER %s: Received commit order from controller. Commit transaction with id %d" %(server, trans_id))
         cp_msg = CommitProtocolMessage()
         cp_msg.type = CommitProtocolMessage.ACK
         cp_msg.ack.task_id = cp_msg.commit.task_id
@@ -111,7 +118,7 @@ class twoPhaseCommit:
         self.messageSendCallback(server, cp_msg)
 
     def handle_abort(self, trans_id, server, cp_msg): 
-        print ("SERVER %s: Received abort order from controller. Abort transaction with id %d" %(server, trans_id)) 
+        #print ("SERVER %s: Received abort order from controller. Abort transaction with id %d" %(server, trans_id)) 
         cp_msg = CommitProtocolMessage()
         cp_msg.type = CommitProtocolMessage.ACK
         cp_msg.ack.task_id = cp_msg.commit.task_id
@@ -122,25 +129,9 @@ class twoPhaseCommit:
     # as that is out of the scope for our project. Being realistic, 
     # success/failure of a transaction would depend on application. Lets assume all transactions are completed successfully in this case	
     def handle_commit_req(self, trans_id, server, cp_msg): 
-        print ("SERVER %s: Commit request has been received"%server)
+        #print ("SERVER %s: Commit request has been received"%server)
 		#Assuming that transaction has always completed successfully by the time the commit request arrives
         self.commandArrival(cp_msg)
-        '''
-        Transaction completion callbacks should be called in the controller
-        if(cp_msg.success == True):
-            self.txnSuccessCallback(trans_id, server)
-        else: 
-            self.txnFailCallback(trans_id, server)
-        '''
-
-    # Txn wasn't completed by server, next step is to disagree to commit request
-    def txnFailCallback(self, trans_id, server):
-        print("Transaction %d was NOT completed by the server %s"%(trans_id, server))
-
-    # Txn was completed by server, next step is to agree to commit request
-    def txnSuccessCallback(self, trans_id, server):
-        print("Transaction %d was successfully completed by the server %s"%(trans_id, server))
-
 
     def commandComplete(self, trans_id, cmd_id, success, server_reply):
         cp_msg = CommitProtocolMessage()

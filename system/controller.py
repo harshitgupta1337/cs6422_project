@@ -38,6 +38,7 @@ class Controller:
         self.N = N
         self.w = w
         self.server_state = {}
+        self.server_url_to_id = {}
         self.transaction_id_counter = 0
         #self.init_servers(server_data)
         self.executing_transactions = {}
@@ -66,13 +67,13 @@ class Controller:
         server_idx = len(self.server_state)
         # TODO need to add a lock here 
         self.server_state[server_idx] = ServerState(server_idx, init_server.cpu, init_server.memory, server_url)
+        self.server_url_to_id[server_url] = server_idx
         print ("Registered server %s with CPU=%d memory=%d"%(server_url, init_server.cpu, init_server.memory))
 
     def on_recv_msg(self, src, data):
-        print (src)
         msg = Message()
         msg.ParseFromString(data)
-        print ("Received msg of type %d"%(msg.type))
+        #print ("Received msg of type %d"%(msg.type))
         if msg.type == Message.INIT_SERVER:
             self.on_init_server_msg(msg)
         if msg.type == Message.APP_REQ:
@@ -88,16 +89,12 @@ class Controller:
         self.send_msg(dst, msg)
     
     def send_msg(self, dst, msg):
-        print ("Sending message to " , dst)
         self.server_socket.sendMsg(dst, msg.SerializeToString())
 
-    def on_transaction_complete(self, trans_id, server_replies):
+    def on_transaction_complete(self, trans_id, success, server_replies):
         print ("Transaction %d complete"%trans_id)
-        failure = False
-        for server in server_replies.keys():
-            if server_replies[server].type == CommitProtocolMessage.DISAGREEMENT:
-                failure = True
-        if failure:
+        self.executing_transactions.pop(trans_id, None)
+        if not success:
             self.process_transaction_failure(trans_id, server_replies)
         else:
             self.process_transaction_success(trans_id, server_replies)
@@ -109,7 +106,6 @@ class Controller:
     def increment_server_versions(self, server_idxs):
         for server_idx in server_idxs:
             self.server_state[server_idx].version.v1 += 1
-        print (self.server_state[server_idx].version.v1)
 
     def process_request(self, request):
         servers = self.select_servers(request)
@@ -146,7 +142,6 @@ class Controller:
         if len(self.server_state) < self.N:
             print ("Unable to submit request")
             return
-        print ("Submitting request")
         self.request_queue.put(msg)
 
     def init_servers(self, server_data_file):
@@ -165,6 +160,7 @@ class Controller:
         t = TransactionStruct(transaction_id, version_map, tasks)
         map_t = version_map.keys()
 
+        self.pending_trans_condition.acquire()
         for e in self.executing_transactions.keys():
             map_e = self.executing_transactions[e].version_map.keys()
             if bool(set(map_t) & set(map_e)):
@@ -177,29 +173,54 @@ class Controller:
                 # there is an overlap
                 t.dependencies.add(self.pending_transactions[p].transaction_id)
 
-        print ("Adding transaction id %d to pending transactions"%transaction_id)
-        self.pending_trans_condition.acquire()
         self.pending_transactions[transaction_id] = t
         self.pending_trans_condition.notify()
         self.pending_trans_condition.release()
 
-
     def process_transaction_failure(self, transaction_id, server_replies):
-        # TODO mutual exclusion with request handling thread
-        pass
+        self.req_queue_condition.acquire()
+        self.pending_trans_condition.acquire()
+        print ("Transaction %d FAILED :("%transaction_id)
+    
+        dependents = []
+
+        pending_ids = self.pending_transactions.keys()
+        sorted_ids = sorted(pending_ids)
+
+        for pend_trans_id in sorted_ids:
+            if transaction_id in self.pending_transactions[pend_trans_id].dependencies:
+                dependents.append(pend_trans_id)
+            elif bool(set(dependents) & set(self.pending_transactions[pend_trans_id].dependencies)):
+                dependents.append(pend_trans_id)
+
+        for dependency in dependents:
+            self.pending_transactions.pop(dependency, None)
+            for pend_trans_id in self.pending_transactions.keys():
+                if dependency in self.pending_transactions[pend_trans_id].dependencies:
+                    self.pending_transactions[pend_trans_id].dependencies.remove(dependency)
+
+        # 2. Resubmit their request
+        for dependency in dependents:
+            self.process_request(None)
+
+        for server in server_replies:
+            server_id = self.server_url_to_id[server]
+            self.server_state[server_id].version.CopyFrom(server_replies[server].curr_version)
+
+        self.pending_trans_condition.release()
+        self.req_queue_condition.release()
 
     def process_transaction_success(self, transaction_id, server_replies):
-        # TODO mutual exclusion with request handling thread
-
-        # update the version ???
-        self.executing_transactions.pop(transaction_id, None)
+        #  TODO update the version ???
+        self.req_queue_condition.acquire()
 
         self.pending_trans_condition.acquire()
         for pend_trans_id in self.pending_transactions.keys():
             if transaction_id in self.pending_transactions[pend_trans_id].dependencies:
-                self.pending_transactions[pend_trans_id].remove(transction_id)
+                self.pending_transactions[pend_trans_id].dependencies.remove(transaction_id)
         self.pending_trans_condition.notify()
         self.pending_trans_condition.release()
+        self.req_queue_condition.release()
 
     def execute_transaction(self, trans_id, trans_struct):
         self.executing_transactions[trans_id] = trans_struct
@@ -218,9 +239,10 @@ class Controller:
                 self.pending_trans_condition.wait()
             else:
                 # process the transactions in to_execute
-                trans_struct = self.pending_transactions[pend_trans_id]
-                self.pending_transactions.pop(pend_trans_id, None)
-                self.execute_transaction(pend_trans_id, trans_struct)
+                for pend_trans_id in to_execute:
+                    trans_struct = self.pending_transactions[pend_trans_id]
+                    self.pending_transactions.pop(pend_trans_id, None)
+                    self.execute_transaction(pend_trans_id, trans_struct)
             self.pending_trans_condition.release()        
 
 def merge_args(yaml_conf, cmdline_args):

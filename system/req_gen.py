@@ -37,6 +37,6 @@ if __name__ == "__main__":
     reqgen = ReqGen(args.url, args.controller_url)
 
     while True:
-        time.sleep(1)
+        time.sleep(0.1)
         reqgen.send_req()
         #break

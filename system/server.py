@@ -18,7 +18,7 @@ from proto.messages_pb2 import *
 from poisson_process import *
 
 class Server:
-    def __init__(self, url, controller_url, cpu, memory, auto_rate=1):
+    def __init__(self, url, controller_url, cpu, memory, auto_rate=0.1):
         self.url = url
         self.controller_url = controller_url
         self.client_socket = Client(url, self.on_msg_recv, self.controller_url)
@@ -50,6 +50,8 @@ class Server:
         trans_id = cp_msg.transaction_id
         cmd_id = cp_msg.commit_req.task_id
         task = cp_msg.commit_req.task
+
+        time.sleep(0.25)
 
         if self.version_happened_before(self.state.version, task.version):
             # Command will be successful
