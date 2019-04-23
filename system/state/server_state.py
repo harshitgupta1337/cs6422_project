@@ -8,8 +8,9 @@ from proto.commit_protocol_pb2 import *
 '''
 class ServerState:
     
-    def __init__(self, server_id, max_cpu, max_memory):
+    def __init__(self, server_id, max_cpu, max_memory, url):
         self.server_id = server_id
+        self.server_url = url
         self.allocations = {}
         self.max_cpu = max_cpu
         self.max_memory = max_memory
