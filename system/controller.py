@@ -7,7 +7,6 @@ import argparse
 import yaml
 
 from state.server_state import *
-#from two_phase_commit.proto.commit_protocol_pb2 import *
 from two_phase_commit.twoPhaseCommit import *
 from comm.server_instance import *
 from proto.messages_pb2 import *

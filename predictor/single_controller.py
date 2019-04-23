@@ -6,17 +6,19 @@ import random, math
 ncr_cache = {}
 
 def ncr(n, r):
-    #global ncr_cache
-    #if (n,r) in ncr_cache.keys():
-    #    return ncr_cache[(n,r)]
     r = min(r, n-r)
     numer = reduce(op.mul, range(n, n-r, -1), 1)
     denom = reduce(op.mul, range(1, r+1), 1)
     result = numer/denom
-    #ncr_cache[(n,r)] = result
     return result
 
+'''
+    Model for single-controller scenario
+'''
 class SingleControllerPredictor:
+    '''
+        Initialize latency distributions for controller-server pairs
+    '''
     def initialize_server_latency_dists(self, ctrl_server_lat_mean, ctrl_server_lat_stddev):
         for server_idx in range(self.N):
             self.server_latency_dists.append(ControllerServerLatencyDist(ctrl_server_lat_mean, ctrl_server_lat_stddev))
@@ -34,6 +36,7 @@ class SingleControllerPredictor:
         self.initialize_server_latency_dists(ctrl_server_lat_mean, ctrl_server_lat_stddev)
    
     '''
+        The probability of a server being last chosen by k-th previous transaction
         k has to be >= 1 
     '''
     def get_prob_last_change_k(self, k):
@@ -45,12 +48,18 @@ class SingleControllerPredictor:
         prob *= (1 - not_chosen)
         return prob
 
+    '''
+        The probability of autonomous change on server 
+    '''
     def get_prob_auto_change(self, k, server_idx):
         latency_dist = self.server_latency_dists[server_idx]
 
         exponent = -1 * self.auto_rate * (k*self.inter_trans_time + latency_dist.sample() - latency_dist.sample() - latency_dist.sample() - latency_dist.sample())
         return (1 - math.exp(exponent))
 
+    '''
+        Calculate probability of transaction success
+    '''
     def generate_single_prediction(self):
         prob_not_changed = 1
 
@@ -68,6 +77,9 @@ class SingleControllerPredictor:
         return prob_not_changed
         #return (1 - prob_not_changed)
 
+    '''
+        Generate predictions of transaction success probabilities
+    '''
     def generate_predictions(self):
         probs = []
         for trial in range(self.num_trials):
