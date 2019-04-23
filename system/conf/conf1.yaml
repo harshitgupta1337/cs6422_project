@@ -1,4 +1,4 @@
-N : 1
+N : 2
 w : 1
 server_data : conf/servers.yaml
 url : tcp://127.0.0.1:50000
