@@ -11,6 +11,12 @@ from two_phase_commit.twoPhaseCommit import *
 from comm.server_instance import *
 from proto.messages_pb2 import *
 
+
+from Queue import *
+import datetime
+global q #global variable ensures msgs are added to same queue and only one is maintained
+q = Queue(maxsize=0)
+
 class LatencyInjector:
     def __init__(self, delay, send_callback):
         self.delay = delay
@@ -18,15 +24,42 @@ class LatencyInjector:
     
     def send_msg(self, msg):
         print ("Need to inject latency = %f"%self.delay)
-        msg.time_to_send = int(time.time() + self.delay)
+        
+        #add static latency
+        msg.time_to_send = int(time.time() + self.delay) 
 
-        # TODO Push to queue
+        #Push to queue
+        q.put(msg)
 
         # TODO This code is a shortcut. Needs to be deleted
         # Actual sending will be done in another thread that polls the queue
         # It should use same callback though
-        self.send_callback(msg)
+        # self.send_callback(msg)
 
+#another thread that polls the queue
+class NewThread(threading.Thread):
+    def __init__(self, send_callback):
+        threading.Thread.__init__(self)
+        self.send_callback = LatencyInjector.send_callback          #same callback function to be used here
+    
+    def run(self):
+        elem=q.get()
+        
+        ##sleep for msg.time_to_send-datetime.datetime.now()
+        # if msg.time_to_send == datetime.datetime.now() then sleep time = 0
+        time.sleep(elem.time_to_send-datetime.datetime.now())
+        self.send_callback(elem)
+        
+        '''
+        #if else not required
+        if datetime.datetime.now()<msg.time_to_send:
+            #sleep for msg.time_to_send-datetime.datetime.now()
+        else:
+            self.send_callback(msg)
+        '''
+
+        
+        
 class RequestHandler(threading.Thread):
     def __init__(self, request_queue, req_queue_mutex, func, *args, **kwargs):
         self.request_queue = request_queue
