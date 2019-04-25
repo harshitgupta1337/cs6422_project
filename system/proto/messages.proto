@@ -21,8 +21,10 @@ message Message {
 
     required Type type = 1;
     optional string src = 2;
-    optional InitServer init_server = 3;
-    optional AppRequest app_request = 4;
-    optional CommitProtocolMessage cp_msg = 5;
+    optional string dst = 3;
+    optional uint64 time_to_send = 4;
+    optional InitServer init_server = 5;
+    optional AppRequest app_request = 6;
+    optional CommitProtocolMessage cp_msg = 7;
 }
 

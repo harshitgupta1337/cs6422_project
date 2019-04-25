@@ -13,7 +13,6 @@ class twoPhaseCommit:
         self.transaction_data = {}
         self.phase1_replies = {}
         self.phase2_replies = {}
-        self.function = function
         self.transaction_success = True
 
     def prepareCommitReq(self, task, transaction_id, task_id):

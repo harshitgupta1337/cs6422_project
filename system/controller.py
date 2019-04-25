@@ -11,6 +11,22 @@ from two_phase_commit.twoPhaseCommit import *
 from comm.server_instance import *
 from proto.messages_pb2 import *
 
+class LatencyInjector:
+    def __init__(self, delay, send_callback):
+        self.delay = delay
+        self.send_callback = send_callback
+    
+    def send_msg(self, msg):
+        print ("Need to inject latency = %f"%self.delay)
+        msg.time_to_send = int(time.time() + self.delay)
+
+        # TODO Push to queue
+
+        # TODO This code is a shortcut. Needs to be deleted
+        # Actual sending will be done in another thread that polls the queue
+        # It should use same callback though
+        self.send_callback(msg)
+
 class RequestHandler(threading.Thread):
     def __init__(self, request_queue, req_queue_mutex, func, *args, **kwargs):
         self.request_queue = request_queue
@@ -43,6 +59,8 @@ class Controller:
         self.executing_transactions = {}
         self.pending_transactions = {}
         self.pending_trans_condition = threading.Condition()
+
+        self.latency_injector = LatencyInjector(50.0, self.send_msg)
 
         self.commit_protocol = twoPhaseCommit("controller", self.send_cp_msg, self.on_transaction_complete, None)
 
@@ -85,9 +103,12 @@ class Controller:
         msg = Message()
         msg.type = Message.COMMIT_PROTOCOL
         msg.cp_msg.CopyFrom(cp_msg)
-        self.send_msg(dst, msg)
+        msg.dst = dst
+        self.latency_injector.send_msg(msg)
     
-    def send_msg(self, dst, msg):
+    def send_msg(self, msg, dst=None):
+        if not dst:
+            dst = msg.dst
         self.server_socket.sendMsg(dst, msg.SerializeToString())
 
     def on_transaction_complete(self, trans_id, success, server_replies):
